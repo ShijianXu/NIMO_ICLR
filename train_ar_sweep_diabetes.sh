@@ -1,0 +1,31 @@
+#!/bin/bash
+
+# Define array of lasso_penalty values to sweep over
+lasso_values=(0.05 0.1 0.5 1.0 1.5 2.0)
+
+# Loop over dataset indices 1 through 9
+for ds_idx in {1..9}; do
+  data_path="./data/diabetes_${ds_idx}"
+
+  # Sweep over each lasso_penalty value
+  for lasso_penalty in "${lasso_values[@]}"; do
+    group_penalty=$(echo "$lasso_penalty / 10" | bc -l)
+
+    echo "Dataset: diabetes_${ds_idx} | lasso_penalty=$lasso_penalty | group_penalty=$group_penalty"
+
+    python train_ar.py \
+      --task "reg" \
+      --data_path "$data_path" \
+      --data_name "synthetic" \
+      --batch_size 1024 \
+      --input_dim 10 \
+      --output_dim 1 \
+      --num_epochs 3000 \
+      --learning_rate 5e-3 \
+      --lasso_penalty "$lasso_penalty" \
+      --group_penalty "$group_penalty" \
+      --lasso_norm 1 \
+      --group_norm 1 \
+      --expr_name "ar_reg_diabetes_${ds_idx}_lp_${lasso_penalty}"
+  done
+done

@@ -1,0 +1,11 @@
+python train_simple_nn.py \
+    --task "reg" \
+    --data_path "./data/synthetic_reg/limitation1_p3_n20000_poly" \
+    --data_name "synthetic" \
+    --batch_size 16384 \
+    --input_dim 9 \
+    --output_dim 1 \
+    --lr 5e-3 \
+    --dropout 0.6 \
+    --num_epochs 400 \
+    --expr_name "simplenn_reg_limit1_p3_n20000_poly"

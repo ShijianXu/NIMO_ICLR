@@ -1,0 +1,15 @@
+python train_ar.py \
+    --task "reg" \
+    --data_path "./data/boston_1" \
+    --data_name "synthetic" \
+    --batch_size 16384 \
+    --input_dim 8 \
+    --output_dim 1 \
+    --num_epochs 800 \
+    --learning_rate 5e-3 \
+    --lasso_penalty 0.01 \
+    --group_penalty 0.001 \
+    --lasso_norm 1 \
+    --group_norm 1 \
+    --noise_injection \
+    --expr_name "ar_reg_boston_1_lp_0.0001"
