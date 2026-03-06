@@ -192,8 +192,8 @@ if __name__ == "__main__":
     parser.add_argument("--learning_rate", type=float, default=3e-4)
     parser.add_argument("--lasso_penalty", type=float, default=1e-3)
     parser.add_argument("--group_penalty", type=float, default=1e-3)
-    parser.add_argument("--lasso_norm", type=float, default=0.5)
-    parser.add_argument("--group_norm", type=float, default=0.25)
+    parser.add_argument("--lasso_norm", type=float, default=1)
+    parser.add_argument("--group_norm", type=float, default=1)
     parser.add_argument("--hidden_dim", type=int, default=None)
     parser.add_argument('--dropout', type=float, default=0)
 
