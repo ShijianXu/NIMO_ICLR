@@ -150,10 +150,10 @@ NIMO is compared against:
 
 ```bibtex
 @inproceedings{xu2026nimo,
-  title     = {NIMO: a Nonlinear Interpretable MOdel},
+  title     = {{NIMO}: a {N}onlinear {I}nterpretable {MO}del},
   author    = {Xu, Shijian and Negri, Marcello Massimo and Roth, Volker},
-  booktitle = {International Conference on Learning Representations (ICLR)},
+  booktitle = {The Fourteenth International Conference on Learning Representations},
   year      = {2026},
-  url       = {https://arxiv.org/abs/2506.05059}
+  url       = {https://openreview.net/forum?id=OHn8jDdpFk}
 }
 ```
