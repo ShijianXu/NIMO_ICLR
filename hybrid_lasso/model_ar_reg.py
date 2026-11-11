@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 import lightning as L
 import numpy as np
+from einops import rearrange
 
 
 def to_bin(x, n_bits):
@@ -51,7 +52,7 @@ class AdaptiveRidgeRegression(L.LightningModule):
         self.save_hyperparameters()
 
         # create CO matrix
-        CO = np.ones((input_dim, input_dim))
+        CO = np.ones((input_dim, input_dim))  # p x p
         if not self.no_feat_mask:
             np.fill_diagonal(CO, 0.0)  # set diagonal to zero
 
@@ -65,7 +66,13 @@ class AdaptiveRidgeRegression(L.LightningModule):
         else:
             self.n_bits = 0
 
-        self.CO = torch.tensor(CO, dtype=torch.float32, device="cuda")
+        # p x (p + n_bits); n_bits = 0 if no_pos_encoding
+        self.CO = nn.Buffer(torch.tensor(CO, dtype=torch.float32), persistent=False)
+
+        # CO with all features zeroed, keeping only the position code; input of the baseline
+        CO_zero = self.CO.clone()
+        CO_zero[:, :input_dim] = 0.0
+        self.CO_zero = nn.Buffer(CO_zero, persistent=False)
 
         # MLP definition
         if hidden_dim is not None:
@@ -80,12 +87,12 @@ class AdaptiveRidgeRegression(L.LightningModule):
         # self.dropout1 = nn.Dropout(p=dropout) if dropout > 0 else nn.Identity()
         self.dropout2 = nn.Dropout(p=dropout) if dropout > 0 else nn.Identity()
 
-        self.register_buffer("beta", torch.randn(self.input_dim, device="cuda"))
+        self.beta = nn.Buffer(torch.randn(size=(input_dim, num_models)))
 
         if fit_intercept:
-            self.beta_0 = nn.Parameter(torch.randn(1, device="cuda") * 0.1)
+            self.beta_0 = nn.Parameter(torch.randn(num_models) * 0.1)
         else:
-            self.register_buffer("beta_0", torch.zeros(1, device="cuda"))
+            self.beta_0 = nn.Buffer(torch.zeros(num_models))
 
         self.c = nn.Parameter(torch.ones(self.input_dim) * 0.1)
         self.alpha2 = nn.Parameter(torch.tensor(2.0))
@@ -109,33 +116,8 @@ class AdaptiveRidgeRegression(L.LightningModule):
         return self.fc3(z)
 
     def build_B_u(self, X):
-        # B_u = X + X * G_u = X * (1 + G_u)
-        # X: Bxp, A_mat: Bx(p+n_bits)
-        A_mat = torch.cat([X, torch.ones((X.size(0), self.n_bits), device=X.device)], dim=1)
-
-        def G_K(C):
-            B = A_mat * C
-            B_zero = torch.cat(
-                [
-                    torch.zeros(1, self.input_dim, device=B.device),
-                    B[0, self.input_dim : (self.input_dim + self.n_bits)].unsqueeze(0),
-                ],
-                dim=1,
-            )
-            z = self.forward_MLP(B)
-            z_zero = self.forward_MLP(B_zero)
-            z = z - z_zero
-
-            z = torch.tanh(z)
-            z = z * 0.5 * (1.0 + torch.tanh(self.alpha2))
-
-            return z + 1
-
-        G_u = torch.vmap(G_K, randomness="different")(self.CO).squeeze()
-        G_u = G_u.T
-        B_u = X * G_u
-
-        return B_u
+        # B_u = X + X * G_u = X * (1 + G_u); X, G_u, B_u: B x p
+        return X * self.compute_nonlinearity(X)
 
     def forward(self, B_u):
         B_u = torch.cat([torch.ones(B_u.size(0), 1, device=B_u.device), B_u], dim=1)
@@ -231,26 +213,18 @@ class AdaptiveRidgeRegression(L.LightningModule):
         return optimizer
 
     def compute_nonlinearity(self, X):
+        # X: B x p, A_mat: B x (p + n_bits)
         A_mat = torch.cat([X, torch.ones((X.size(0), self.n_bits), device=X.device)], dim=1)
 
-        def G_K(C):
-            B = A_mat * C
-            B_zero = torch.cat(
-                [
-                    torch.zeros(1, self.input_dim, device=B.device),
-                    B[0, self.input_dim : (self.input_dim + self.n_bits)].unsqueeze(0),
-                ],
-                dim=1,
-            )
-            z = self.forward_MLP(B)
-            z_zero = self.forward_MLP(B_zero)
-            z = z - z_zero
+        # one masked, position-tagged copy of each sample per feature: B x p x (p + n_bits)
+        inflated = rearrange(A_mat, "b d -> b 1 d") * rearrange(self.CO, "p d -> 1 p d")
+        z = self.forward_MLP(rearrange(inflated, "b p d -> (b p) d"))
+        z = rearrange(z, "(b p) 1 -> b p", p=self.input_dim)
 
-            z = torch.tanh(z)
-            z = z * 0.5 * (1.0 + torch.tanh(self.alpha2))
+        # baseline with all features zeroed, keeping only the position code: p
+        z = z - rearrange(self.forward_MLP(self.CO_zero), "p 1 -> p")
 
-            return z + 1
+        z = torch.tanh(z)
+        z = z * 0.5 * (1.0 + torch.tanh(self.alpha2))
 
-        G_u = torch.vmap(G_K, randomness="different")(self.CO).squeeze()
-        G_u = G_u.T
-        return G_u
+        return z + 1  # B x p
