@@ -1,5 +1,5 @@
 """
-PyTorch Lightning wrapper for Adaptive Ridege Regression.
+PyTorch Lightning wrapper for Adaptive Ridge Regression.
 """
 
 import torch
@@ -153,16 +153,16 @@ class AdaptiveRidgeRegression(L.LightningModule):
         X_tilde = B_u @ dc
         A = X_tilde.T @ X_tilde + self.lambda_ * torch.eye(self.input_dim, device=x.device)
         b = X_tilde.T @ y
-        gammma = torch.linalg.solve(A, b)
+        gamma = torch.linalg.solve(A, b)
 
-        self.beta = c * gammma
+        self.beta = c * gamma
         y_hat = self.forward(B_u)
 
         mse_loss = nn.MSELoss()(y, y_hat)
         lasso_loss = self.lasso_penalty * torch.sum((self.c**2) ** self.lasso_norm)
 
         ## Test: this loss helps to alleviate over-shrinkage
-        # gamma_loss = self.lasso_penalty * torch.sum((gammma ** 2)**0.1)
+        # gamma_loss = self.lasso_penalty * torch.sum((gamma ** 2)**0.1)
         gamma_loss = 0.0
         ##
 
