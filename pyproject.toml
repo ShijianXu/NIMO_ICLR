@@ -1,0 +1,36 @@
+[project]
+name = "nimo"
+version = "0.1.0"
+description = "NIMO: a Nonlinear Interpretable MOdel"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "torch",
+    "lightning",
+    "lassonet",
+    "numpy",
+    "pandas",
+    "scikit-learn",
+    "seaborn",
+    "tensorboardX",
+]
+
+[project.optional-dependencies]
+notebooks = [
+    "ipykernel",
+    "matplotlib",
+    "pmlb",
+    "shap",
+    "tabpfn",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu130" }
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
