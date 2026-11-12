@@ -110,10 +110,10 @@ class AdaptiveRidgeRegression(L.LightningModule):
                 z1 = torch.tanh(0.3 * z1)
         else:
             z1 = torch.tanh(0.3 * z1)  # No noise during eval
-        z1 = torch.cat([z1, X[:, self.input_dim : (self.input_dim + self.n_bits)]], dim=1)
+        z1 = torch.cat([z1, X[..., self.input_dim : (self.input_dim + self.num_pos_bits)]], dim=-1)
         z2 = torch.sin(2 * np.pi * self.fc2(z1))
         z2 = self.dropout2(z2)
-        z = torch.cat([z2, z1], dim=1)
+        z = torch.cat([z2, z1], dim=-1)
         return self.fc3(z)
 
     def build_B_u(self, X):
