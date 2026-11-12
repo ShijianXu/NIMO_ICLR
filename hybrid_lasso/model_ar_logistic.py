@@ -90,7 +90,7 @@ class AdaptiveRidgeLogisticRegression(L.LightningModule):
     def build_B_u(self, X):
         # B_u = X + X * G_u = X * (1 + G_u)
         # X: Bxp, A_mat: Bx(p+n_bits)
-        A_mat = torch.cat([X, torch.ones((X.size(0), self.n_bits), device=X.device)], dim=1)
+        A_mat = F.pad(X, (0, self.n_bits), value=1.0)
 
         def G_K(C):
             B = A_mat * C
@@ -120,7 +120,7 @@ class AdaptiveRidgeLogisticRegression(L.LightningModule):
         return B_u
 
     def forward(self, B_u):
-        B_u = torch.cat([torch.ones(B_u.size(0), 1, device=B_u.device), B_u], dim=1)
+        B_u = F.pad(B_u, (1, 0), value=1.0)  # prepend intercept column
         beta = torch.cat([self.beta_0, self.beta])
 
         y_hat = B_u @ beta
@@ -147,7 +147,7 @@ class AdaptiveRidgeLogisticRegression(L.LightningModule):
         gammma = torch.linalg.solve(A, b)
         new_beta = c * gammma
 
-        B_u = torch.cat([torch.ones(B_u.size(0), 1, device=B_u.device), B_u], dim=1)
+        B_u = F.pad(B_u, (1, 0), value=1.0)  # prepend intercept column
         beta = torch.cat([self.beta_0, new_beta])
         y_hat_new = B_u @ beta
 

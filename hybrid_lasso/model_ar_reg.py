@@ -2,11 +2,12 @@
 PyTorch Lightning wrapper for Adaptive Ridge Regression.
 """
 
-import torch
-import torch.nn as nn
 import lightning as L
 import numpy as np
-from einops import rearrange
+import torch
+import torch.nn.functional as F
+from einops import rearrange, repeat
+from torch import nn
 
 
 def to_bin(x, n_bits):
@@ -120,7 +121,7 @@ class AdaptiveRidgeRegression(L.LightningModule):
         return X * self.compute_nonlinearity(X)
 
     def forward(self, B_u):
-        B_u = torch.cat([torch.ones(B_u.size(0), 1, device=B_u.device), B_u], dim=1)
+        B_u = F.pad(B_u, (1, 0), value=1.0)  # prepend intercept column
         beta = torch.cat([self.beta_0, self.beta])
 
         y_hat = B_u @ beta
@@ -213,8 +214,8 @@ class AdaptiveRidgeRegression(L.LightningModule):
         return optimizer
 
     def compute_nonlinearity(self, X):
-        # X: B x p, A_mat: B x (p + n_bits)
-        A_mat = torch.cat([X, torch.ones((X.size(0), self.n_bits), device=X.device)], dim=1)
+        # X: B x p
+        A_mat = F.pad(X, (0, self.num_pos_bits), value=1.0)  # B x (p + num_pos_bits)
 
         # one masked, position-tagged copy of each sample per feature: B x p x (p + n_bits)
         inflated = rearrange(A_mat, "b d -> b 1 d") * rearrange(self.CO, "p d -> 1 p d")
