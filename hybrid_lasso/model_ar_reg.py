@@ -192,26 +192,8 @@ class AdaptiveRidgeRegression(L.LightningModule):
         return y_hat
 
     def configure_optimizers(self):
-        if self.fit_intercept:
-            optimizer = torch.optim.Adam(
-                list(self.fc1.parameters())
-                + list(self.fc2.parameters())
-                + list(self.fc3.parameters())
-                + [self.beta_0]
-                + [self.c]
-                + [self.alpha2],
-                lr=self.lr,
-            )
-        else:
-            optimizer = torch.optim.Adam(
-                list(self.fc1.parameters())
-                + list(self.fc2.parameters())
-                + list(self.fc3.parameters())
-                + [self.c]
-                + [self.alpha2],
-                lr=self.lr,
-            )
-        return optimizer
+        # beta_0 is a parameter only with fit_intercept, otherwise a buffer
+        return torch.optim.Adam(self.parameters(), lr=self.lr)
 
     def compute_nonlinearity(self, X):
         # X: B x p
