@@ -6,7 +6,7 @@ import lightning as L
 import numpy as np
 import torch
 import torch.nn.functional as F
-from einops import rearrange, repeat
+from einops import rearrange
 from torch import nn
 
 
@@ -59,15 +59,15 @@ class AdaptiveRidgeRegression(L.LightningModule):
 
         # create binary map, for positional encoding
         if not self.no_pos_encoding:
-            self.n_bits = int(np.floor(np.log2(input_dim))) + 1
+            self.num_pos_bits = int(np.floor(np.log2(input_dim))) + 1
             BinMap = np.vstack(
-                [to_bin(i, self.n_bits) for i in range(1, input_dim + 1)]
-            )  # p x n_bits
+                [to_bin(i, self.num_pos_bits) for i in range(1, input_dim + 1)]
+            )  # p x num_pos_bits
             CO = np.hstack([CO, BinMap])
         else:
-            self.n_bits = 0
+            self.num_pos_bits = 0
 
-        # p x (p + n_bits); n_bits = 0 if no_pos_encoding
+        # p x (p + num_pos_bits); num_pos_bits = 0 if no_pos_encoding
         self.CO = nn.Buffer(torch.tensor(CO, dtype=torch.float32), persistent=False)
 
         # CO with all features zeroed, keeping only the position code; input of the baseline
@@ -77,23 +77,23 @@ class AdaptiveRidgeRegression(L.LightningModule):
 
         # MLP definition
         if hidden_dim is not None:
-            self.fc1 = nn.Linear(self.input_dim + self.n_bits, hidden_dim)
-            self.fc2 = nn.Linear(hidden_dim + self.n_bits, hidden_dim)
-            self.fc3 = nn.Linear(hidden_dim + hidden_dim + self.n_bits, self.output_dim)
+            self.fc1 = nn.Linear(self.input_dim + self.num_pos_bits, hidden_dim)
+            self.fc2 = nn.Linear(hidden_dim + self.num_pos_bits, hidden_dim)
+            self.fc3 = nn.Linear(hidden_dim + hidden_dim + self.num_pos_bits, self.output_dim)
         else:
-            self.fc1 = nn.Linear(self.input_dim + self.n_bits, 64)
-            self.fc2 = nn.Linear(64 + self.n_bits, 128)
-            self.fc3 = nn.Linear(128 + 64 + self.n_bits, self.output_dim)
+            self.fc1 = nn.Linear(self.input_dim + self.num_pos_bits, 64)
+            self.fc2 = nn.Linear(64 + self.num_pos_bits, 128)
+            self.fc3 = nn.Linear(128 + 64 + self.num_pos_bits, self.output_dim)
 
         # self.dropout1 = nn.Dropout(p=dropout) if dropout > 0 else nn.Identity()
         self.dropout2 = nn.Dropout(p=dropout) if dropout > 0 else nn.Identity()
 
-        self.beta = nn.Buffer(torch.randn(size=(input_dim, num_models)))
+        self.beta = nn.Buffer(torch.randn(input_dim))
 
         if fit_intercept:
-            self.beta_0 = nn.Parameter(torch.randn(num_models) * 0.1)
+            self.beta_0 = nn.Parameter(torch.randn(1) * 0.1)
         else:
-            self.beta_0 = nn.Buffer(torch.zeros(num_models))
+            self.beta_0 = nn.Buffer(torch.zeros(1))
 
         self.c = nn.Parameter(torch.ones(self.input_dim) * 0.1)
         self.alpha2 = nn.Parameter(torch.tensor(2.0))
@@ -199,10 +199,9 @@ class AdaptiveRidgeRegression(L.LightningModule):
         # X: B x p
         A_mat = F.pad(X, (0, self.num_pos_bits), value=1.0)  # B x (p + num_pos_bits)
 
-        # one masked, position-tagged copy of each sample per feature: B x p x (p + n_bits)
+        # one masked, position-tagged copy of each sample per feature: B x p x (p + num_pos_bits)
         inflated = rearrange(A_mat, "b d -> b 1 d") * rearrange(self.CO, "p d -> 1 p d")
-        z = self.forward_MLP(rearrange(inflated, "b p d -> (b p) d"))
-        z = rearrange(z, "(b p) 1 -> b p", p=self.input_dim)
+        z = rearrange(self.forward_MLP(inflated), "b p 1 -> b p")
 
         # baseline with all features zeroed, keeping only the position code: p
         z = z - rearrange(self.forward_MLP(self.CO_zero), "p 1 -> p")
